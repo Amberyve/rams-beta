@@ -5,8 +5,8 @@ const ROLES = ['admin', 'rsd', 'user'] as const;
 
 /** Only admins may call these endpoints. Returns the caller's id or an error response. */
 async function requireAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return { error: NextResponse.json({ error: 'Server is missing SUPABASE_SERVICE_ROLE_KEY — add it in Vercel → Settings → Environment Variables.' }, { status: 500 }) };
+  if (!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: NextResponse.json({ error: 'Server is missing SUPABASE_SECRET_KEY — add it in your environment variables.' }, { status: 500 }) };
   }
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,19 +20,71 @@ export async function GET() {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
   const admin = createServiceClient();
-  const [{ data: profiles, error }, { data: list }] = await Promise.all([
+  const [{ data: profiles, error: profilesError }, { data: list, error: usersError }] = await Promise.all([
     admin.from('profiles').select('id, full_name, email, role, created_at').order('created_at'),
     admin.auth.admin.listUsers({ perPage: 1000 }),
   ]);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (profilesError) return NextResponse.json({ error: `Could not load profiles: ${profilesError.message}` }, { status: 500 });
+  if (usersError) return NextResponse.json({ error: `Could not load authentication users: ${usersError.message}` }, { status: 500 });
   const lastSeen = new Map(list?.users.map((u) => [u.id, u.last_sign_in_at]) ?? []);
-  return NextResponse.json({ users: profiles!.map((p) => ({ ...p, last_sign_in_at: lastSeen.get(p.id) ?? null })), me: auth.userId });
+  return NextResponse.json({ users: (profiles ?? []).map((p) => ({ ...p, last_sign_in_at: lastSeen.get(p.id) ?? null })), me: auth.userId });
 }
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
   const body = await req.json().catch(() => ({}));
+
+  if (Array.isArray(body.users)) {
+    if (body.users.length === 0) return NextResponse.json({ error: 'No accounts to import' }, { status: 400 });
+    if (body.users.length > 250) return NextResponse.json({ error: 'Import is limited to 250 accounts at a time' }, { status: 400 });
+
+    const admin = createServiceClient();
+    const seen = new Set<string>();
+    const failures: { row: number; email: string; error: string }[] = [];
+    let imported = 0;
+
+    for (const [index, entry] of body.users.entries()) {
+      const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+      const row = Number.isInteger(Number(item.row)) ? Number(item.row) : index + 2;
+      const email = String(item.email ?? '').trim().toLowerCase();
+      const full_name = String(item.full_name ?? '').trim();
+      const password = String(item.password ?? '');
+      const role = String(item.role ?? 'user').trim().toLowerCase();
+
+      if (!full_name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || !ROLES.includes(role as typeof ROLES[number])) {
+        failures.push({ row, email, error: 'Invalid name, email, role, or password (minimum 8 characters).' });
+        continue;
+      }
+      if (seen.has(email)) {
+        failures.push({ row, email, error: 'Duplicate email in this import.' });
+        continue;
+      }
+      seen.add(email);
+
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name },
+      });
+      if (error || !data.user) {
+        failures.push({ row, email, error: error?.message ?? 'Supabase did not return a created user.' });
+        continue;
+      }
+
+      const { error: profileError } = await admin.from('profiles').upsert({ id: data.user.id, full_name, email, role });
+      if (profileError) {
+        await admin.auth.admin.deleteUser(data.user.id);
+        failures.push({ row, email, error: `Profile could not be saved: ${profileError.message}` });
+        continue;
+      }
+      imported += 1;
+    }
+
+    return NextResponse.json({ imported, failures });
+  }
+
   const email = String(body.email ?? '').trim().toLowerCase();
   const full_name = String(body.full_name ?? '').trim();
   const password = String(body.password ?? '');

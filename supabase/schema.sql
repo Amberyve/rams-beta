@@ -112,6 +112,46 @@ create table if not exists public.researchers (        -- was `experts` + `areas
   updated_at       timestamptz not null default now()
 );
 
+-- ---------- Researcher reference lists -------------------------------
+create table if not exists public.campuses (
+  id         bigint generated always as identity primary key,
+  name       text not null unique,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.colleges (
+  id         bigint generated always as identity primary key,
+  name       text not null unique,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.research_centers (
+  id         bigint generated always as identity primary key,
+  name       text not null unique,
+  created_at timestamptz not null default now()
+);
+
+insert into public.campuses (name)
+select distinct btrim(campus) from public.researchers where nullif(btrim(campus), '') is not null
+on conflict (name) do nothing;
+insert into public.colleges (name)
+select distinct btrim(college) from public.researchers where nullif(btrim(college), '') is not null
+on conflict (name) do nothing;
+insert into public.research_centers (name)
+select distinct btrim(research_center) from public.researchers where nullif(btrim(research_center), '') is not null
+on conflict (name) do nothing;
+
+do $$
+declare lookup_table text;
+begin
+  foreach lookup_table in array array['campuses', 'colleges', 'research_centers'] loop
+    execute format('alter table public.%I enable row level security', lookup_table);
+    execute format('drop policy if exists "%1$s read" on public.%1$I', lookup_table);
+    execute format('drop policy if exists "%1$s admin manage" on public.%1$I', lookup_table);
+    execute format('create policy "%1$s read" on public.%1$I for select to authenticated using (true)', lookup_table);
+    execute format('create policy "%1$s admin manage" on public.%1$I for all to authenticated using (public.is_admin()) with check (public.is_admin())', lookup_table);
+    execute format('grant select on public.%I to authenticated', lookup_table);
+  end loop;
+end $$;
+
 create table if not exists public.research_projects (  -- was `researches`
   id                bigint generated always as identity primary key,
   researcher_id     bigint references public.researchers(id) on delete cascade,

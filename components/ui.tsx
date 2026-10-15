@@ -65,18 +65,27 @@ export function Modal({
   children: React.ReactNode; footer?: React.ReactNode; size?: 'sm' | 'lg';
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Keep the latest onClose in a ref. Parents pass a new arrow function on every
+  // render, so depending on it directly re-ran this effect on every keystroke and
+  // yanked focus back to the first field.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
-    (ref.current?.querySelector<HTMLElement>('.overflow-y-auto input:not([type=hidden]), .overflow-y-auto textarea, .overflow-y-auto select')
-      ?? ref.current?.querySelector<HTMLElement>('button'))?.focus();
+    // Focus the first field once, when the dialog opens — never while typing.
+    if (!ref.current?.contains(document.activeElement)) {
+      (ref.current?.querySelector<HTMLElement>('.overflow-y-auto input:not([type=hidden]):not([type=file]), .overflow-y-auto textarea, .overflow-y-auto select')
+        ?? ref.current?.querySelector<HTMLElement>('button'))?.focus();
+    }
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

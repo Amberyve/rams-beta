@@ -31,7 +31,10 @@ const NAV: { group?: string; items: NavItem[]; admin?: boolean }[] = [
     { href: '/services', label: 'Services', icon: Microscope },
     { href: '/equipment', label: 'Equipment', icon: Wrench },
   ] },
-  { group: 'Administration', admin: true, items: [{ href: '/users', label: 'User Accounts', icon: ShieldCheck }] },
+  { group: 'Administration', admin: true, items: [
+    { href: '/users', label: 'User Accounts', icon: ShieldCheck },
+    { href: '/settings', label: 'Setting', icon: Settings },
+  ] },
 ];
 
 const ROLE_LABEL = { admin: 'Administrator', rsd: 'RSD Staff', user: 'Viewer' } as const;

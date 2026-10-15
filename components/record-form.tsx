@@ -63,6 +63,8 @@ function FieldInput({ field: f, value, onChange, values }: { field: Field; value
       );
     case 'relation':
       return <RelationSelect id={id} field={f} value={value} onChange={onChange} />;
+    case 'lookup':
+      return <LookupSelect id={id} field={f} value={value} onChange={onChange} />;
     case 'tags':
       return <TagInput id={id} value={Array.isArray(value) ? value : []} onChange={onChange} placeholder={f.placeholder} />;
     case 'image':
@@ -96,6 +98,44 @@ function RelationSelect({ id, field, value, onChange }: { id: string; field: Fie
       <option value="">{options ? 'None' : 'Loading…'}</option>
       {options?.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
     </select>
+  );
+}
+
+function LookupSelect({ id, field, value, onChange }: { id: string; field: Field; value: any; onChange: (v: any) => void }) {
+  const [options, setOptions] = useState<string[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const current = value == null ? '' : String(value);
+
+  useEffect(() => {
+    let active = true;
+    const { table, labelKey } = field.relation!;
+    async function loadOptions() {
+      try {
+        const { data, error } = await createClient().from(table).select(labelKey).order(labelKey);
+        if (!active) return;
+        const rows = data as unknown as Record<string, unknown>[] | null;
+        setOptions(error ? [] : (rows ?? []).map((row) => String(row[labelKey])));
+        setLoadError(!!error);
+      } catch {
+        if (active) {
+          setOptions([]);
+          setLoadError(true);
+        }
+      }
+    }
+    void loadOptions();
+    return () => { active = false; };
+  }, [field.relation]);
+
+  return (
+    <>
+      <select id={id} value={current} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        <option value="">{options === null ? 'Loading…' : 'Select…'}</option>
+        {current && !options?.includes(current) && <option value={current}>{current} (not in settings)</option>}
+        {options?.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+      {loadError && <p className="mt-1 text-xs text-rose-600">Could not load list options. You can keep the current value or try again.</p>}
+    </>
   );
 }
 

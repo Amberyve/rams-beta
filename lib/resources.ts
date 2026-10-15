@@ -6,7 +6,7 @@ export type Role = 'admin' | 'rsd' | 'user';
 
 export type FieldType =
   | 'text' | 'textarea' | 'email' | 'date' | 'year' | 'currency'
-  | 'select' | 'tags' | 'image' | 'relation';
+  | 'select' | 'tags' | 'image' | 'relation' | 'lookup';
 
 export interface Field {
   key: string;
@@ -126,7 +126,7 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     ],
     fields: [
       { key: 'title', label: 'Title of work', type: 'text', required: true, wide: true },
-      { key: 'authors', label: 'Author(s)', type: 'text', required: true, wide: true },
+      { key: 'authors', label: 'Author(s)', type: 'text', required: true, wide: true, placeholder: 'Separate names with semicolons' },
       { key: 'publisher', label: 'Publisher', type: 'text' },
       { key: 'pub_year', label: 'Year published', type: 'year' },
     ],
@@ -278,10 +278,9 @@ export const RESEARCHER_FIELDS: Field[] = [
   ] },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone', type: 'text' },
-  { key: 'campus', label: 'Campus', type: 'text' },
-  { key: 'college', label: 'College', type: 'text' },
-  { key: 'cluster', label: 'Research cluster', type: 'text' },
-  { key: 'research_center', label: 'Research center', type: 'text' },
+  { key: 'campus', label: 'Campus', type: 'lookup', relation: { table: 'campuses', labelKey: 'name' } },
+  { key: 'college', label: 'College', type: 'lookup', relation: { table: 'colleges', labelKey: 'name' } },
+  { key: 'research_center', label: 'Research center', type: 'lookup', relation: { table: 'research_centers', labelKey: 'name' } },
   { key: 'expertise', label: 'Expertise (one line)', type: 'text', wide: true },
   { key: 'education', label: 'Educational qualifications', type: 'tags', wide: true, help: 'Press Enter after each degree' },
   { key: 'specializations', label: 'Areas of specialization', type: 'tags', wide: true, help: 'Press Enter after each area' },

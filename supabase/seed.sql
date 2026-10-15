@@ -8,6 +8,16 @@ insert into public.researchers (full_name, email, campus, college, cluster, rese
  ('Jose R. Villanueva','jrvillanueva@isatu.edu.ph','Main (La Paz)', 'College of Engineering and Architecture','Engineering', 'Renewable Energy Lab',   'Faculty', 'Solar microgrids',                  '{"PhD in Electrical Engineering"}',                      '{"Renewable Energy","Power Systems"}'),
  ('Ana P. Dela Cruz',  'apdelacruz@isatu.edu.ph', 'Miagao',        'College of Arts and Sciences',          'Natural Sciences','Food Innovation Center','Faculty', 'Food chemistry and product development','{"MS Chemistry"}',                               '{"Food Science","Product Development"}');
 
+insert into public.campuses (name)
+select distinct btrim(campus) from public.researchers where nullif(btrim(campus), '') is not null
+on conflict (name) do nothing;
+insert into public.colleges (name)
+select distinct btrim(college) from public.researchers where nullif(btrim(college), '') is not null
+on conflict (name) do nothing;
+insert into public.research_centers (name)
+select distinct btrim(research_center) from public.researchers where nullif(btrim(research_center), '') is not null
+on conflict (name) do nothing;
+
 insert into public.research_projects (researcher_id, title, applicability, status, publication_date)
 select r.id, v.title, v.applicability, v.status::public.research_status, v.pub::date
 from (values
